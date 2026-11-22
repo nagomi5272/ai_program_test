@@ -1,115 +1,2 @@
-import json, os, urllib.request
-
-V = {"p": 1, "n": 3, "b": 3, "r": 5, "q": 9, "k": 0, "": 0}
-N = ((-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1))
-O = ((1,0),(-1,0),(0,1),(0,-1))
-D = ((1,1),(1,-1),(-1,1),(-1,-1))
-K = O + D
-
-def post(url, body):
-  req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"}, method="POST")
-  with urllib.request.urlopen(req) as r:
-    return json.loads(r.read())
-
-def parse_fen(fen):
-  ps = fen.split()
-  b, r = {}, 7
-  for row in ps[0].split("/"):
-    c = 0
-    for ch in row:
-      if ch.isdigit(): c += int(ch)
-      else: b[(r, c)] = ch; c += 1
-    r -= 1
-  ep = None if len(ps) < 4 or ps[3] == "-" else (int(ps[3][1]) - 1, ord(ps[3][0]) - 97)
-  return b, len(ps) < 2 or ps[1] == "w", ep
-
-def attacked(b, sq, w):
-  r, c = sq
-  p, pr = ("P", r - 1) if w else ("p", r + 1)
-  if b.get((pr, c - 1)) == p or b.get((pr, c + 1)) == p:
-    return True
-  for ds, ch in ((N, "N" if w else "n"), (K, "K" if w else "k")):
-    if any(b.get((r + dr, c + dc)) == ch for dr, dc in ds):
-      return True
-  for ds, pcs in ((O, "RQ" if w else "rq"), (D, "BQ" if w else "bq")):
-    for dr, dc in ds:
-      nr, nc = r + dr, c + dc
-      while 0 <= nr < 8 and 0 <= nc < 8:
-        t = b.get((nr, nc))
-        if t:
-          if t in pcs: return True
-          break
-        nr += dr; nc += dc
-  return False
-
-def opp_max(b, w, ep):
-  ok = "K" if w else "k"
-  ksq = next((s for s, p in b.items() if p == ok), None)
-  best = 0
-  def chk(src, dst, p, val, epc=None):
-    nonlocal best
-    if val <= best: return
-    tb = b.copy()
-    del tb[src]
-    if epc: tb.pop(epc, None)
-    tb[dst] = p
-    nk = dst if p == ok else ksq
-    if nk is None or not attacked(tb, nk, not w): best = val
-  for (r, c), p in b.items():
-    if p.isupper() != w: continue
-    pt = p.lower()
-    if pt == "p":
-      nr = r + (1 if w else -1)
-      for dc in (-1, 1):
-        nc = c + dc
-        t = b.get((nr, nc))
-        if t and t.isupper() != w: chk((r, c), (nr, nc), p, V[t.lower()])
-        elif ep == (nr, nc) and b.get((r, nc)) == ("p" if w else "P"): chk((r, c), (nr, nc), p, 1, (r, nc))
-    elif pt in "nk":
-      for dr, dc in (N if pt == "n" else K):
-        t = b.get((r + dr, c + dc))
-        if t and t.isupper() != w: chk((r, c), (r + dr, c + dc), p, V[t.lower()])
-    else:
-      for dr, dc in (O if pt == "r" else D if pt == "b" else K):
-        nr, nc = r + dr, c + dc
-        while 0 <= nr < 8 and 0 <= nc < 8:
-          t = b.get((nr, nc))
-          if t:
-            if t.isupper() != w: chk((r, c), (nr, nc), p, V[t.lower()])
-            break
-          nr += dr; nc += dc
-    if best == 9: break
-  return best
-
-def move_key(b, w, ep, mv):
-  sr, sc, dr, dc = int(mv[1]) - 1, ord(mv[0]) - 97, int(mv[3]) - 1, ord(mv[2]) - 97
-  pr = mv[4:5].lower()
-  nb = b.copy()
-  m = nb.pop((sr, sc), "")
-  t = nb.get((dr, dc), "")
-  if t and m and m.isupper() != t.isupper(): cap = V[t.lower()]
-  elif m.lower() == "p" and ep == (dr, dc) and sc != dc: cap = 1; nb.pop((sr, dc), None)
-  else: cap = 0
-  if m.lower() == "k" and abs(dc - sc) == 2:
-    rf, rt = (7, 5) if dc > sc else (0, 3)
-    if (sr, rf) in nb: nb[(sr, rt)] = nb.pop((sr, rf))
-  nb[(dr, dc)] = (pr.upper() if m.isupper() else pr) if pr else m
-  nep = ((sr + dr) // 2, sc) if m.lower() == "p" and abs(dr - sr) == 2 else None
-  return (opp_max(nb, not w, nep) - cap, -V[pr], V[m.lower()] if cap else 0, mv)
-
-def choose_move(fen, legal_moves):
-  b, w, ep = parse_fen(fen)
-  return min(legal_moves, key=lambda m: move_key(b, w, ep, m))
-
-def main():
-  base = os.environ["MAKEFUN_ENV_URL"].rstrip("/")
-  st = post(base + "/game", {})
-  while st.get("status") != "done":
-    if st.get("status") != "your_move": break
-    mvs = st.get("legal_moves") or []
-    if not mvs: break
-    st = post(base + "/move", {"game": st["game"], "move": choose_move(st["fen"], mvs)})
-    if st.get("status") not in ("your_move", "done"): st = post(base + "/game", {})
-
-if __name__ == "__main__":
-  main()
+#coding:l1
+import lzma;exec(lzma.decompress('\0 \0\0�\0\0\0\0\0\0\x004�%ů^����2i%]����S�Ck1�H�+̢��ys���ݿ�Ę��\'���dw�d2���}����ϟ{,�x�/4�m�bHM8l��I�H�A�?.\r�K-�Y���)#D�}�O(����6F����	�Bu�Υ�A:NW|gQ���IV���bWS���PMX����΄�w��~�B�a�n����}ղ@���.�W���[t�����h�������+(�2����X�\'���2�q-�f�/vG(��?�v5��)�]���B\0\\�?#T�h���x�6\\��~P�h�G|޲������i��Z��J�o�V�q.��	�Y9vK-�73��O�ZM,H(���n|1����t�Q�:�\n�ܯ˥(�cI�+�L�"="ˋO�dpp�бK����\'���D�Pm�͜5�Ω�r��U]��8Y��q��Q�g]��=;H��p+�5��!&mK�*O�$��#�x��e8!-��e�#�t�*6�>z9�/��v���R�2�U��}�"�l^��w #\r��8~48x(�g�Ȝ�����s�>)<����Ę��R$�cq8�m	�.�������2MP��`%���zԶۍ§��g�]J��t��@h׏ZЉu�֋��B�pe���/����X|�����qJ���,Z�I\n��E��W��4�s�l$��U����%#A�P�Yj&�B��.yr&=�o�_����`�س��?f�P��!\r|��TY_>��:q�6_���$�>��u��\r\0�����p��=����y%%F\'~�,4�lL	\n��A�m*�$e!�/I.���GB�kM�lv��-���&\0���f���枏���$�O���n\n����E����h�+�Kx�\'uQX�}U�!8�*ڎ��YǢ�WSz����GtW��m��t�i֣�\nEWy�Vo]����ٗ����9�[)��\n���[3\\�X�>�:�}�H$�;(W�%MN����w-�K>��:�M�bJؤ�jW��"(�n�e?B�/C(�,�Ma"2g,\0\')(2nL��8i�x{S�z�����A�<����.Oƕ�t_�м8!�q�v��y"mӷ��ν�m�t�q�?~��xx\0	�+-b\r����<��l�Uv���C���=H�=-G.��;kH�uyr����S	�n����X�`���g�|�h�2��=K3����m�)f��#�sX�	�>�����YM��u�$&����� T?i�L�� �l�G1��!�vQ�֌J�U�3�P�W�A���\'�ғD*�>�C�h�S#��R#Pg�宇�3˧A�bɶ\r�\r�a~)f?t�]�X�׶�y��p\0��@����L�IT�}����ɡ�[��.�#Yk��-s�h�T����Q���y�^8aTA�ݽJ\n��^^�(��l�l��;RaC��Q*1D�%j�/�_������L��o�&�\0&���N62U����N�U�M9}�	�Js��K�}��)\n��P��B��+v���Ne��Oʀ/�,�U�IS��=+�?cOI��,��.E�=�f�z�׈�b\0���Q �%��ʏ�Y�Nե�E�i�r�R�|��CF/1�mX-�3���ߥ:�#��Ԓ�����2�Oё���cd\r�11Z|S��j��0hyg�8b\\ub�G�M���gX��S�_]>�V��QL�H�CX֞8{�Ye������bK�)��"i�r6�\0�_I���C�����ϲh:L��\'$�v�x�~�KB�a��h�����;h�O\'��i�]�\n ���a��6 \'(�@5|}\\8�NJjx����EҬ\nUb�s�^�M�q�zv���D��W�GoP�o��\r��!\0!�����w~,HI��i���!r��xO\'S���u�g�q���i�������𵊲�y�����?��ǉB}\r��gv�q\n$`���o�O\n�@��#�cd�a��\'��� v����Vj��1�F���,\'A���bB9�Q��?�ѤhU�\\���7�YB`I�(�*E&��\'�����ˮ��IH뀨�N�x�^I�����H��]i*� �M.t>��8�4ͧ���X؀{��6����0>���C���#���SY�������R>Q��?�[�È���lb��@�\r��`����ſ�]�D�5�� ;�hz��yg��F����VH��Z�w?�����9��ET\'\r�.��gSB���pT)v\\���߮��ԍܟ��W�-9(�oW;;��*��@Ig��&ƺ�J�����P�t`��Y��L:�oY^����\\\\�7A8�`K�W�<z��}��5)�Y�	*�/�T{<V���oD�\\?�)�v�{�X�-{�z{;�Lى���\nG�t��Ed��0��`���t�L8-sSjy�~����dI�F�����\n#����oѥ�O��̉h��0:m�pZ��ڶZ�����]��-����A4����54w`�У�Q�A���k�l�B�\r�j���\n0�jֱ�]���-�k+�&�\'����l+�9���Kt���!��P�����)x�\\_�E�WCo*w-`�N�[���G�M?�rŠY���L0�F���(!wZ����~��	\n7鉲O�T=/k��ܒ�D*�bO-o��}|���x�T���U�Mb�ZV$+{�>��+�i;�4u5&"qH\rZ�n�EN��j�H�|6�^tW�\'=�|GN{�!�+�䐥öo�Pb\\�h�_����!!�����d�H�eE\0�MX=� ��H��z�O��e��5����������$�_��h\nH�H,�R$j��O���� 9��3 OBT��M8rE�ݟ��|ׯ�===+��=S_D��U���j�[����gz�m����\'z����%�y�#���<�p��b����B���3���dq�f��ҍ���0��[��C��Ra����חC�$��Oܱ�kIڔ^k�7)�kǷj�j�&����{F�w��slEę�ek7t�q�=����wb�[82R�i�o\0s�b��h$�X�d�o����\\��_�CHX`�l�jz�h�]>��4#�'.encode('l1')))
